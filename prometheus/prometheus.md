@@ -1,4 +1,4 @@
-# Configuring Determined with Prometheus and Grafana
+# Configure Determined with Prometheus and Grafana
 Setting up Prometheus/Grafana monitoring tools for Determined
 
 | Supported Versions |
@@ -7,7 +7,7 @@ Setting up Prometheus/Grafana monitoring tools for Determined
   Prometheus 2.14.0
   Determined 0.17.8+
 
-This document details the setup and configuration needed to enable a Grafana dashboard for monitoring hardware and system metrics on a cloud cluster (AWS or Kubernetes) running Determined. Determined exposes a Prometheus endpoint, enabled in the master configuration, containing mappings between internal task, GPU, and container definitions. The endpoint is used by Prometheus to gather relevant metrics on a cluster running Determined. 
+This document describes the setup and configuration needed to enable a Grafana dashboard to monitor hardware and system metrics on a cloud cluster, such as AWS or Kubernetes, running Determined. Determined provides a Prometheus endpoint containing mappings between internal task, GPU, and container definitions which is used by Prometheus to collect relevant metrics on a cluster running Determined. The endpoint is not enabled by default but can be enabled in the master configuration. 
 
 
 ## Reference
@@ -22,33 +22,35 @@ This document details the setup and configuration needed to enable a Grafana das
 
 
 ## Constraints
-The Determined Prometheus endpoint exposed is configured to work with cAdvisor for CPU metrics and DCGM for GPU metrics. Though other monitoring tools can be used with the setup, this guide will detail configuration of only the aforementioned tools. Prometheus queries for other tools may differ depending on the format and organization of the metrics returned.
+The Determined Prometheus endpoint is configured to work with cAdvisor for CPU metrics and DCGM for GPU metrics. Although other monitoring tools can be used with the setup, this guide details only cAdvisor and DCGM tool configuration. Prometheus queries on metrics collected by other tools can differ depending on the format and organization of the returned metrics. 
 
 ## Prerequisites
 - Grafana installation for dashboard monitoring
-- on-cluster Prometheus instance for time-series data collection
+- An on-cluster Prometheus instance for time-series data collection
 
 
 ## Configure Determined
-Install and run Determined on a cluster. When launching the master instance, enable the Prometheus endpoint by adding a flag to the `master.yaml` configuration.
+Install and run Determined on a cluster. When launching the master instance, enable the Prometheus endpoint by adding a flag to the `master.yaml` configuration: 
 ```
 observability:
     enable_prometheus: true
 ```
-This will expose two Prometheus API endpoints on the instance:
+This presents the following two Prometheus API endpoints on the instance. 
 
-### /prom/det-state-metrics###
+### {$DET_MASTER_ADDR}/prom/det-state-metrics
 
-`det-state-metrics` includes mapping of various machine-level labels (GPU UUIDs, container IDs, etc.) to internal Determined entities (task, allocation, experiment labels) used by PromQL to join vectors.
+The `det-state-metrics` endpoint includes various machine-level labels mappings, including GPU UUIDs and container IDs, to internal Determined entities, such as task, allocation, and experiment labels, used by PromQL to join vectors. 
 
-### /prom/det-http-sd-config
-`det-http-sd-config` contains address and resource pool information for the currently active agents, which will be used by Prometheus as targets for scraping. The endpoint is configured to support running default cAdvisor (port 8080) and DCGM (port 9400) monitoring. Other tools exposing Prometheus metrics may be used in place of cAdvisor and DCGM if they are running on these ports.
+### {$DET_MASTER_ADDR}/prom/det-http-sd-config
+The `det-http-sd-config` endpoint contains address and resource pool information for currently active agents, which are used by Prometheus as targets for scraping. This endpoint is configured to support running default cAdvisor, port 8080, and DCGM, port 9400, monitoring. Other tools exposing Prometheus metrics can be used instead of cAdvisor and DCGM if they are running on these ports. 
 
 
 ## Configure cAdvisor and dcgm-exporter
 cAdvisor and dcgm-exporter must be running on the cluster agents to be monitored. This can be installed manually or run as individual Docker containers.
 
-To easily configure dynamic agents to startup with cAdvisor and dcgm-exporter, a startup script can be added to `master.yaml`.
+The cAdvisor and dcgm-exporter tools must be running on the cluster agents that are monitored. These can be installed manually or run as individual Docker containers. 
+
+To configure dynamic agents to start up with cAdvisor and dcgm-exporter, a startup script can be added to `master.yaml`: 
 ```
 - pool_name: compute-pool
     provider:
@@ -71,21 +73,26 @@ To easily configure dynamic agents to startup with cAdvisor and dcgm-exporter, a
           --device=/dev/kmsg \
           gcr.io/cadvisor/cadvisor:$VERSION
 ```
+ 
+
+In the pool configuration section of `master.yaml`, a startup script parameter can be added to run a script on agent startup. This sample startup script includes the default setup docker commands provided by [dcgm-exporter](https://github.com/NVIDIA/dcgm-exporter) and [cAdvisor](https://github.com/google/cadvisor). 
 
 ## Configure Prometheus
-[Install Prometheus](https://prometheus.io/docs/prometheus/latest/installation/) on any node in the cluster being monitored. 
+[Install Prometheus](https://prometheus.io/docs/prometheus/latest/installation/) on any node in the monitored cluster.
 
 Launch Prometheus with the [provided prometheus.yml configuration](prometheus.yml).
-> Info
-> - `metric_relabel_configs` edits certain label names in jobs for joining in PromQL
-> - `scrape_interval` values can be modified to optimize for resolution/size/time
+> Tip
+> - The `metric_relabel_configs` parameter edits certain label names in jobs for joining in PromQL.
+> - The `scrape_interval` parameter values can be modified to optimize for resolution/size/time. 
 
 ## Configure Grafana
-A Grafana instance can be installed on any machine that adds the above Prometheus address as a datasource.
-Once the Prometheus datasource is connected, import the [Determined Hardware Metrics dashboard JSON](determined-hardware-grafana.json). 
+A Grafana instance can be installed on any machine that adds the above Prometheus address as a data source. Once a Grafana server is running and the Web UI is accessible, follow these steps:
+1. Add a Prometheus data source
+Under Grafana -> Configuration -> Data Sources -> Add data source, configure the Prometheus data source setup in the previous section by setting the URL to the address of your running Prometheus server. By default, this will be the machine address on port 9090.
+2. Once the Prometheus data source is connected, import the [Determined Hardware Metrics dashboard JSON](determined-hardware-grafana.json) under Grafana -> Create -> Import -> Import via panel json.
 
 ## Example
-After following the above steps and submitting some experiments on the cluster, you should see populated panels in the imported Grafana dashboard.
+After following the above steps and submitting some experiments on the cluster, you should see populated panels in the imported Grafana dashboard (Grafana -> Dashboards).
 
 ![Sample Dashboard](grafana-example.png)
 
