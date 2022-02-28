@@ -88,3 +88,5 @@ Once the Prometheus datasource is connected, import the [Determined Hardware Met
 After following the above steps and submitting some experiments on the cluster, you should see populated panels in the imported Grafana dashboard.
 
 ![Sample Dashboard](grafana-example.png)
+
+Each panel in the dashboard is powered by one or more Prometheus queries and tracks a specific metric on the cluster as a percentage of its total capacity. Results can be further filtered by `tags` and `resource pool` as well as time range in Grafana. 
