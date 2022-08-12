@@ -26,7 +26,11 @@ with det.keras.init() as train_context:
     # makes sure optimizer state is saved correctly in checkpoints
     optimizer = keras.optimizers.Adam(learning_rate)
     optimizer = train_context.wrap_optimizer(optimizer)
-
+    
+    # Wrap your datasets
+    # This ensures proper sharding happens for distributed training before the .fit call
+    ds_train = train_context.wrap_dataset(ds_train)
+    
     # Compile your model as usual
     model.compile(
         optimizer=keras.optimizers.Adam(learning_rate),
@@ -123,6 +127,7 @@ with det.keras.init() as train_context:
         ]
     )
 ```
+
 
 ## Technical Details
 Additional features Determined provides will be injected into the training methods via callbacks. These are 
