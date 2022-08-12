@@ -6,64 +6,66 @@ providing Determined features in an accessible, intuitive way using a Callbacks 
 ## Training
 Basic training is done with a `fit` call similar to the native Keras implementation, but as a method on the train 
 context object.
+```diff
+ # Initialize a train context
++with det.keras.init() as train_context:
+     # Define your model
+     model = keras.models.Sequential([
+         keras.layers.Flatten(input_shape=(28, 28)),
+         keras.layers.Dense(128, activation='relu'),
+         keras.layers.Dense(10),
+         keras.layers.Dropout(1.0)
+     ])
+ 
+     # Access hparams from the ClusterInfo API
+-    learning_rate = 0.001
++    learning_rate = det.get_cluster_info().trial.hparams["learning_rate"]
+ 
+     # Wrap your optimizer
+     # This is needed before model.compile
+     # Train context wraps the optimizer with HorovodOptimizer if doing distributed training and
+     # makes sure optimizer state is saved correctly in checkpoints
+     optimizer = keras.optimizers.Adam(learning_rate)
++    optimizer = train_context.wrap_optimizer(optimizer)
+     
+     # Wrap your datasets
+     # This ensures proper sharding happens for distributed training before the .fit call
++    ds_train = train_context.wrap_dataset(ds_train)
++    ds_test = train_context.wrap_dataset(ds_test)
+     
+     # Compile your model as usual
+     model.compile(
+         optimizer=keras.optimizers.Adam(learning_rate),
+         loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+         metrics=[keras.metrics.SparseCategoricalAccuracy()],
+     )
+
+     # Training is done with a fit call on the context object with a similar API as native Keras but the
+     # model is passed in.
+-    model.fit(
++    train_context.fit(
++        model=model,
+         x=ds_train,
+         epochs=6,
+         # Validation data must be passed into the fit call instead of a separate evaluate call
+         validation_data=ds_test,
+         validation_split=0.0,
+         # Add custom callbacks here. The Trainer will by default inject certain Determined callbacks to
+         # handle automatic checkpointing and metrics reporting
+         callbacks=[],
+     )
 ```
-# Initialize a train context
-with det.keras.init() as train_context:
-    # Define your model
-    model = keras.models.Sequential([
-        keras.layers.Flatten(input_shape=(28, 28)),
-        keras.layers.Dense(128, activation='relu'),
-        keras.layers.Dense(10),
-        keras.layers.Dropout(1.0)
-    ])
 
-    # Access hparams from the ClusterInfo API
-    learning_rate = det.get_cluster_info().trial.hparams["learning_rate"]
-
-    # Wrap your optimizer
-    # This is needed before model.compile
-    # Train context wraps the optimizer with HorovodOptimizer if doing distributed training and
-    # makes sure optimizer state is saved correctly in checkpoints
-    optimizer = keras.optimizers.Adam(learning_rate)
-    optimizer = train_context.wrap_optimizer(optimizer)
-    
-    # Wrap your datasets
-    # This ensures proper sharding happens for distributed training before the .fit call
-    ds_train = train_context.wrap_dataset(ds_train)
-    
-    # Compile your model as usual
-    model.compile(
-        optimizer=keras.optimizers.Adam(learning_rate),
-        loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-        metrics=[keras.metrics.SparseCategoricalAccuracy()],
-    )
-
-    # Training is done with a fit call on the context object with a similar API as native Keras but the
-    # model is passed in.
-    train_context.fit(
-        model=model,
-        x=ds_train,
-        epochs=6,
-        # Validation data must be passed into the fit call instead of a separate evaluate call
-        validation_data=ds_test,
-        validation_split=0.0,
-        # Add custom callbacks here. The Trainer will by default inject certain Determined callbacks to
-        # handle automatic checkpointing and metrics reporting
-        callbacks=[],
-    )
-```
-
-### Custom Distributed Training
+### Custom Distributed Training (maybe we don't need this. TODO: remove this example)
 If launched with the launch layer, distributed context will be automatically initialized. But if you want to do it 
 yourself, pass in a distributed context object to the train context.
 
 ```
-distributed_context = det.core.DistributedContext.from_horovod()
 
 # Perform any distributed-training backend specific initialization needed
-hvd.require_horovod_type("tf.keras", "Keras is in use.")
+import hvd.tf.keras as hvd
 hvd.init()
-
+distributed_context = det.core.DistributedContext.from_horovod(hvd)
 
 with det.keras.init(distributed_context=distributed_context) as train_context:
     model.compile()
@@ -77,7 +79,7 @@ Tensorflow.
 ```
 # If launched with the keras launch layer, TF_CONFIG will be set automatically
 # Else, initialize the distributed context yourself and pass it in to the trainer
-distributed_context = det.core.DistributedContext.from_tensorflow()
+distributed_context = det.core.DistributedContext.from_tf_config()
 
 with det.keras.init(distributed_context) as train_context:
     # Choose a distributed training strategy
@@ -177,6 +179,8 @@ def fit(
         options=None,
         initial_value_threshold=None,
     )
+    
+    # Custom ModelCheckpoint?
 
     callbacks = [
         checkpoint_callback,
@@ -185,6 +189,10 @@ def fit(
     ]
 
     # We pass in a subclassed container to validation_freq to call evaluate during training
-    model.fit(validation_freq=context.ValidationContainer(),
-              callbacks=callbacks)
+    model.fit(validation_freq=context.ValidationFreq(),
+              callbacks=callbacks)distributed_context = det.core.DistributedContext.from_horovod()
 ```
+
+TODO:
+- Talk to JJ at Compology about model checkpointing. 
+- 
