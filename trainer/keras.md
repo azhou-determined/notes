@@ -108,6 +108,22 @@ with det.keras.init() as train_context:
     train_context.predict(model)
 ```
 
+### Profiling with Determined
+The Determined profiler is configured as a Keras callback to be passed into `context.fit`
+```
+with det.keras.init() as train_context:
+    train_context.fit(
+        callbacks=[
+            DeterminedProfilerCallback(
+                profiling=True,
+                profiling_start=0,
+                profiling_end=10,
+                sync_timings=None,
+            )
+        ]
+    )
+```
+
 ## Technical Details
 Additional features Determined provides will be injected into the training methods via callbacks. These are 
 automatically included by default with the call to `fit` on the context.
