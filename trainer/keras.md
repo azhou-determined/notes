@@ -56,9 +56,10 @@ context object.
      )
 ```
 
-### Custom Distributed Training (maybe we don't need this. TODO: remove this example)
+### Custom Distributed Training 
 If launched with the launch layer, distributed context will be automatically initialized. But if you want to do it 
 yourself, pass in a distributed context object to the train context.
+Note: perhaps this isn't needed, seems like an edge use case
 
 ```
 
@@ -100,18 +101,19 @@ with det.keras.init(distributed_context) as train_context:
                       metrics=["accuracy"])
 
     # Fit is called from the train context
-    train_context.fit(model)
+    train_context.fit(model, ...)
 
 ```
 
 ### Inference and Checkpoint Loading
 We provide a thin wrapper around `model.predict` for batch inference. Loading from checkpoints is a method accessible
 through the training context.
+For distributed inference, maybe you can just call model.predict()
 
 ```
 with det.keras.init() as train_context:
     model = train_context.load_model_from_checkpoint("checkpoint_path")
-    train_context.predict(model)
+    train_context.predict(model, ...)
 ```
 
 ### Profiling with Determined
@@ -119,6 +121,7 @@ The Determined profiler is configured as a Keras callback to be passed into `con
 ```
 with det.keras.init() as train_context:
     train_context.fit(
+        ...,
         callbacks=[
             DeterminedProfilerCallback(
                 profiling=True,
@@ -193,6 +196,3 @@ def fit(
               callbacks=callbacks)distributed_context = det.core.DistributedContext.from_horovod()
 ```
 
-TODO:
-- Talk to JJ at Compology about model checkpointing. 
-- 
