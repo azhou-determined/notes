@@ -5,7 +5,8 @@ providing Determined features in an accessible, intuitive way using a Callbacks 
 
 ## Training
 Basic training is done with a `fit` call similar to the native Keras implementation, but as a method on the train 
-context object.
+context object. Horovod will be the default launch layer if slots_per_trial > 1, no launch layer needs to be specified if using horovod.
+
 ```diff
  # Initialize a train context
 +with det.keras.init() as train_context:
@@ -42,6 +43,7 @@ context object.
 
      # Training is done with a fit call on the context object with a similar API as native Keras but the
      # model is passed in.
+          
 -    model.fit(
 +    train_context.fit(
 +        model=model,
@@ -56,38 +58,23 @@ context object.
      )
 ```
 
-### Custom Distributed Training 
-If launched with the launch layer, distributed context will be automatically initialized. But if you want to do it 
-yourself, pass in a distributed context object to the train context.
-Note: perhaps this isn't needed, seems like an edge use case
-
-```
-
-# Perform any distributed-training backend specific initialization needed
-import hvd.tf.keras as hvd
-hvd.init()
-distributed_context = det.core.DistributedContext.from_horovod(hvd)
-
-with det.keras.init(distributed_context=distributed_context) as train_context:
-    model.compile()
-    train_context.fit()
-```
-
 ### Native Keras Distributed Training
 We will support a Keras launch layer which initializes the environment variables needed for distributed training in 
 Tensorflow.
 
-```
+`entrypoint: python3 -m determined.launch.tensorflow_distributed train.py`
+
+```diff
 # If launched with the keras launch layer, TF_CONFIG will be set automatically
 # Else, initialize the distributed context yourself and pass it in to the trainer
 distributed_context = det.core.DistributedContext.from_tf_config()
 
 with det.keras.init(distributed_context) as train_context:
     # Choose a distributed training strategy
-    strategy = tf.distribute.MirroredStrategy()
++   strategy = tf.distribute.MirroredStrategy()
 
     # Model must be defined and compiled within the tf.keras strategy scope
-    with strategy.scope():
++   with strategy.scope():
         model = tf.keras.Sequential([
             tf.keras.layers.Conv2D(32, 3, activation="relu", input_shape=(28, 28, 1)),
             tf.keras.layers.MaxPooling2D(),
@@ -106,9 +93,8 @@ with det.keras.init(distributed_context) as train_context:
 ```
 
 ### Inference and Checkpoint Loading
-We provide a thin wrapper around `model.predict` for batch inference. Loading from checkpoints is a method accessible
-through the training context.
-For distributed inference, maybe you can just call model.predict()
+We provide a thin wrapper around `model.predict` for distributed batch inference. Loading from checkpoints is a method accessible
+through the training context. For normal use cases, `model.predict` can be called directly. 
 
 ```
 with det.keras.init() as train_context:
@@ -182,8 +168,6 @@ def fit(
         options=None,
         initial_value_threshold=None,
     )
-    
-    # Custom ModelCheckpoint?
 
     callbacks = [
         checkpoint_callback,
