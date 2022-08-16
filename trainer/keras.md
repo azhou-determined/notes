@@ -36,7 +36,7 @@ context object. Horovod will be the default launch layer if slots_per_trial > 1,
      
      # Compile your model as usual
      model.compile(
-         optimizer=keras.optimizers.Adam(learning_rate),
+         optimizer=optimizer,
          loss=keras.losses.SparseCategoricalCrossentropy(from_logits=True),
          metrics=[keras.metrics.SparseCategoricalAccuracy()],
      )
@@ -65,11 +65,8 @@ Tensorflow.
 `entrypoint: python3 -m determined.launch.tensorflow_distributed train.py`
 
 ```diff
-# If launched with the keras launch layer, TF_CONFIG will be set automatically
-# Else, initialize the distributed context yourself and pass it in to the trainer
-distributed_context = det.core.DistributedContext.from_tf_config()
 
-with det.keras.init(distributed_context) as train_context:
+with det.keras.init() as train_context:
     # Choose a distributed training strategy
 +   strategy = tf.distribute.MirroredStrategy()
 
@@ -98,8 +95,8 @@ through the training context. For normal use cases, `model.predict` can be calle
 
 ```
 with det.keras.init() as train_context:
-    model = train_context.load_model_from_checkpoint("checkpoint_path")
-    train_context.predict(model, ...)
+    model = train_context.load_model_from_checkpoint(trial_id)
+    model.predict(...)
 ```
 
 ### Profiling with Determined
