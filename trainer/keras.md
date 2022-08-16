@@ -177,3 +177,15 @@ def fit(
               callbacks=callbacks)distributed_context = det.core.DistributedContext.from_horovod()
 ```
 
+## Notes
+
+---
+- When do users want to load checkpoints? How to handle forking?
+    - handle forking as usual
+    - if specifying a source trial in the config, fit call gets overriden, model compile basically useless
+- Do we want to support predict inference during training? 
+- Is distributed inference hard to support? Do we need to support this at all?
+- Should we support custom model checkpoint callback?
+  - maybe just move the checkpoint callback outside of the fit call as a separate configurable callback. makes more 
+    sense for checkpoint-related configs to be passed in like this anyways.
+
