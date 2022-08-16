@@ -174,7 +174,7 @@ def fit(
 
     # We pass in a subclassed container to validation_freq to call evaluate during training
     model.fit(validation_freq=context.ValidationFreq(),
-              callbacks=callbacks)distributed_context = det.core.DistributedContext.from_horovod()
+              callbacks=callbacks)
 ```
 
 ## Notes
