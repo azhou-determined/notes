@@ -90,13 +90,36 @@ with det.keras.init() as train_context:
 ```
 
 ### Inference and Checkpoint Loading
-We provide a thin wrapper around `model.predict` for distributed batch inference. Loading from checkpoints is a method accessible
-through the training context. For normal use cases, `model.predict` can be called directly. 
+`model.predict` can be called directly for inference.
 
 ```
 with det.keras.init() as train_context:
     model = train_context.load_model_from_checkpoint(trial_id)
     model.predict(...)
+```
+
+By default, continue trial behavior will load from `context.latest_checkpoint` if exists, following existing merging 
+behavior in the master, which loads either `latest_checkpoint` or `searcher.source_checkpoint`.
+
+### Custom Checkpointing
+By default, Determined will checkpoint on set periods (every epoch), but the user can override this behavior by passing
+in a custom checkpoint callback. `DeterminedModelCheckpoint` is a subclass of native Keras' `ModelCheckpointCallback` 
+that provides automatic checkpoint handling for preemption. At the method interface level, both callbacks should be 
+identical. Only one checkpoint callback is expected, so an error will be thrown if the user passes in a native 
+`tf.keras.ModelCheckpointCallback`.
+
+```
+checkpoint_callback = DeterminedModelCheckpoint(
+        "checkpoint_path",
+        monitor="val_loss",
+        verbose=0,
+        save_best_only=False,
+        save_weights_only=False,
+        mode='auto',
+        save_freq=checkpoint_freq,
+        options=None,
+        initial_value_threshold=None,
+    )
 ```
 
 ### Profiling with Determined
@@ -153,8 +176,8 @@ def fit(
 ):
     # Set up callbacks to be passed in by default
     
-    # Model checkpointing callback is just native keras implementation
-    checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(
+    # If a DeterminedModelCheckpoint callback type is not passed in, construct one by default
+    checkpoint_callback = DeterminedModelCheckpoint(
         "checkpoint_path",
         monitor="val_loss",
         verbose=0,
@@ -177,15 +200,46 @@ def fit(
               callbacks=callbacks)
 ```
 
-## Notes
+## Discussion + Notes
 
 ---
-- When do users want to load checkpoints? How to handle forking?
-    - handle forking as usual
-    - if specifying a source trial in the config, fit call gets overriden, model compile basically useless
+      
+- What is the difference between continue trial and warm starting?
+  - Continue trial means just continue training without modifying anything (pause & restart, restarts exhausted)
+    - resumes optimizer state
+  - warm starting means picking and choosing between checkpoints
+
+
+- Checkpoint loading flavors
+    - Forking: basically just copying model code and rerunning it
+      - Nothing fancy here, we can do what is currently done
+      
+    - Warm starting: starting from a particular part of the model infrastructure (optimizers, weights, LR Scheduler). 
+      Today either the `latest_checkpoint` of the Trial OR the `source_checkpoint` (if specified) is loaded by the 
+      master and passed down to the `CoreContext` as `context.latest_checkpoint`.
+      - With the same model architecture:
+        - Effectively the same as continue trial. `context.fit()` will load from `context.latest_checkpoint` if exists.
+          
+      - With different model architecture:
+        - No way for us to automatically support this. We would end up with a Frankenstein model.
+    
+    - Trial continuation: resume training where we left off without modifying anything.
+      
+
+        
 - Do we want to support predict inference during training? 
-- Is distributed inference hard to support? Do we need to support this at all?
-- Should we support custom model checkpoint callback?
-  - maybe just move the checkpoint callback outside of the fit call as a separate configurable callback. makes more 
-    sense for checkpoint-related configs to be passed in like this anyways.
+  - Seems like a rare use case. Users can implement their own callback for this so long as it's supported in native 
+    Keras
+    
+- Do we need a context wrapper around the `predict` inference method?
+  - Only use case would be distributed batch inference, but unless we support model parallel this seems like a non-
+use case since there's no distributed communication required on just the forward pass.
+    - Is distributed inference hard to support? Do we need to support this at all?
+      - Probably not that useful and we should avoid shipping too many new apis at once. The existing Trainer should be 
+        easy to extend if this becomes an important use case in the future.
+- How should users configure custom model checkpointing?
+  - We configure a default callback, so maybe we can just move the checkpoint callback outside of the fit call as a 
+    separate configurable callback. This makes more sense for checkpoint-related configs also, since they aren't natural
+    in the native `fit` call.
+  - We need to inject some logic for automatic checkpoint handling during preemption.
 
