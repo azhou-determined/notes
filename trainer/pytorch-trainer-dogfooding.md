@@ -18,7 +18,6 @@
 - [Discussion](#discussion)
 
 ## Overview
----
 This document serves as the dogfooder's guide to PyTorch Trainer, detailing the major changes and features and some points for discussion. I've included a rough walkthrough and example, but I hope to see more organic usages of Trainer API for higher quality feedback.
 
 Thank you, and happy dogfooding!
@@ -27,7 +26,6 @@ Thank you, and happy dogfooding!
 The goal of Trainer APIs is to provide an interface for all of Determined's automatic training features that is minimally-invasive to native training code, and feels natural to use -- whether on-cluster with Determined, or off-cluster locally. With that in mind, I hope you'll find that implementing a training script with PyTorch Trainer is faster to develop and easier to debug.
 
 ## Technical Details
----
 This feature was a major refactor of all Determined PyTorch internals and touches all PyTorch codepaths under `harness`. All `PyTorch` codepaths now call the PyTorch Trainer API, either explicitly through new training code, or internally under legacy training scripts (`harness.py`).
 
 ### Breaking Changes
@@ -37,7 +35,6 @@ This feature was a major refactor of all Determined PyTorch internals and touche
 - `num_gpus`, a previously public value on `PyTorchContext`, is now private. I'm not aware of a real use case for this, and it seems like we accidentally made it public before.
 
 ## API Specifications
----
 ### PyTorchTrial
 Users must still implement a Trial class for use with Trainer API. This abstraction was kept because Determined needs to hook into optimizer step and train batch calls. Though it introduces Determined-specific code to users' PyTorch training, this is a minimal amount of boilerplate needed for the features we support. I've come to think of `PyTorchTrial` as a way of organizing training code rather than rewriting or adding additional code overhead. 
 
@@ -241,7 +238,6 @@ Submit to cluster as usual: `det e create det.yaml .`
 
 
 ## Discussion
----
 This section details known limitations and possible directions for future work. Feedback from dogfooding will also be aggregated here.
 - `det_profiler` is a very clunky object in the Trainer API today. It had to be supported for backwards compatibility reasons, but until we have a clearer picture of `det_profiler`'s role, I decided to keep the complexity out of Trainer API as much as possible. We explored exposing the Determined profiler as a first-class feature of Core API, but without more defined use cases and goals, integrating this feature cleanly into Trainer API was pushed out of scope. This work will instead be a part of the upcoming 'Unified Metrics' project.
 - We do not expose metrics out of `trainer.fit()`. The only way to get metrics during training is via `on_training_workload_end` callbacks. A few ideas for future directions in supporting this:
