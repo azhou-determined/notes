@@ -45,7 +45,7 @@ The API definition for `PyTorchTrial` remains the same, the only difference bein
 
 ### pytorch.init() -> PyTorchContext
 A major quirk with our Trial code today is the inability for users to instantiate a trial class themselves. Due to complex interactions and dependencies between context and object lifetimes, we can't easily untangle these abstractions today. So, we provide users with the context object to use as they wish.
-```
+```python
 def init(
     hparams: Optional[Dict] = None, 
     distributed: Optional[core.DistributedContext] = None
@@ -56,7 +56,7 @@ def init(
 
 ### trainer.fit()
 The main training loop is Trainer's `fit` call, named fit because it is a common name given to this type of managed training loop (see PyTorchLightning, Ray Train, etc.).
-```
+```python
 def fit(
     self,
     checkpoint_period: Optional[pytorch.TrainUnit],
@@ -81,7 +81,7 @@ def fit(
 
 ### trainer.configure_profiler()
 This configures the Determined profiler and must be called before `trainer.fit()`. Any additional calls will override the previous configuration.
-```
+```python
 def configure_profiler(
     self, 
     sync_timings: bool, 
@@ -95,12 +95,12 @@ def configure_profiler(
 
 ## Walkthrough
 ---
-This is a walkthrough detailing how to use the new PyTorch Trainer API. A full example for training with PyTorch Trainer can be found here; it was not included in the main repo's `examples` directory because it is not specific to any example and we already have too many examples. Following dogfooding feedback, an official example may be added.
+This is a walkthrough detailing how to use the new PyTorch Trainer API. A full example for training with PyTorch Trainer can be found [here](./examples/); it was not included in the main repo's `examples` directory because it is not specific to any example and we already have too many examples. Following dogfooding feedback, an official example may be added.
 ### 0. Setup
 Checkout the feature branch (`determined/feature/pytorch-trainer`) and make sure it is up to date.
 ### 1. Define a `PyTorchTrial`
 Nothing new here. Though it's worth noting that since you instantiate the `Trial` and `TrialContext` objects yourself, you no longer have to initilize and wrap models and optimizers inside of the `Trial.__init__` method. You are free to pass in a wrapped model to `Trial.__init__` if you wish.
-```
+```python
 class MyPyTorchTrial(pytorch.PyTorchTrial):
     def __init__(self, context: PyTorchTrialContext) -> None:
         self.context = context
@@ -137,7 +137,7 @@ class MyPyTorchTrial(pytorch.PyTorchTrial):
 ```
 
 ### 2. Initialize your `PyTorchTrial` and the `Trainer`
-```
+```python
 from determined import pytorch
 
 def main():
@@ -168,14 +168,14 @@ if __name__ == "__main__":
 
 ### 3. (Local training) Run your training script locally
 Training scripts using PyTorch Trainer can be run locally, no experiment config file needed. Be sure to specify `max_length` in the `.fit()` call, and `global_batch_size` in `pytorch.init()`.
-```
-with det.pytorch.init(hparams={"global_batch_size": 32}) as train_context:
-    trial = MyPytorchTrial(train_context)
-    trainer = det.pytorch.Trainer(trial, train_context)
-    trainer.fit(
-        max_length=pytorch.Epoch(1),
-        checkpoint_period=pytorch.Batch(10),
-        validation_period=pytorch.Batch(10),
+```diff
++ with det.pytorch.init(hparams={"global_batch_size": 32}) as train_context:
+      trial = MyPytorchTrial(train_context)
+      trainer = det.pytorch.Trainer(trial, train_context)
+      trainer.fit(
++         max_length=pytorch.Epoch(1),
+          checkpoint_period=pytorch.Batch(10),
+          validation_period=pytorch.Batch(10),
     )
 ```
 Run this script directly (`python3 train.py`), or inside of a Jupyter notebook.
@@ -184,26 +184,26 @@ Run this script directly (`python3 train.py`), or inside of a Jupyter notebook.
 Local training can utilize multiple GPUs on a single node with a few modifications to the above code. Note: this is not currently supported as a first-class feature, see Discussions.
 
 Currently only Horovod and PyTorch Distributed backends are supported.
-```
-def main():
-    # Initialize distributed backend before pytorch.init()
-    dist.init_process_group(backend="gloo|nccl")
-
-    # Set flag used by internal PyTorch training loop
-    os.environ["USE_TORCH_DISTRIBUTED"] = "true"
-
-    # Initialize DistributedContext specifying chief IP
-    with det.pytorch.init(
-            hparams={"global_batch_size": 32},
-            distributed=core.DistributedContext.from_torch_distributed(chief_ip="localhost")
-    ) as train_context:
-        trial = MNistTrial(train_context)
-        trainer = det.pytorch.Trainer(trial, train_context)
-        trainer.fit(
-            max_length=pytorch.Epoch(1),
-            checkpoint_period=pytorch.Batch(10),
-            validation_period=pytorch.Batch(10),
-        )
+```diff
+  def main():
++     # Initialize distributed backend before pytorch.init()
++     dist.init_process_group(backend="gloo|nccl")
+  
++     # Set flag used by internal PyTorch training loop
++     os.environ["USE_TORCH_DISTRIBUTED"] = "true"
+  
++     # Initialize DistributedContext specifying chief IP
+      with det.pytorch.init(
+              hparams={"global_batch_size": 32},
++             distributed=core.DistributedContext.from_torch_distributed  (chief_ip="localhost")
+      ) as train_context:
+          trial = MNistTrial(train_context)
+          trainer = det.pytorch.Trainer(trial, train_context)
+          trainer.fit(
+              max_length=pytorch.Epoch(1),
+              checkpoint_period=pytorch.Batch(10),
+              validation_period=pytorch.Batch(10),
+          )
 ```
 
 Call your distributed backend's launcher directly:
@@ -211,14 +211,14 @@ Call your distributed backend's launcher directly:
 
 ### Local Training - Test Mode
 Helpful for debugging code, PyTorch Trainer accepts a `test_mode` parameter which, if true, trains and validates your training code for only one batch, then exits.
-```
-trainer.fit(
-            max_length=pytorch.Epoch(1),
-            checkpoint_period=pytorch.Batch(10),
-            validation_period=pytorch.Batch(10),
-            # Train and validate 1 batch, then exit.
-            test_mode=True
-        )
+```diff
+  trainer.fit(
+              max_length=pytorch.Epoch(1),
+              checkpoint_period=pytorch.Batch(10),
+              validation_period=pytorch.Batch(10),
++             # Train and validate 1 batch, then exit.
++             test_mode=True
+          )
 ```
 This is the same codepath as `det e create det.yaml . --local --test`.
 
