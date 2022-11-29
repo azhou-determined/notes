@@ -94,7 +94,6 @@ def configure_profiler(
 
 
 ## Walkthrough
----
 This is a walkthrough detailing how to use the new PyTorch Trainer API. A full example for training with PyTorch Trainer can be found [here](./examples/); it was not included in the main repo's `examples` directory because it is not specific to any example and we already have too many examples. Following dogfooding feedback, an official example may be added.
 ### 0. Setup
 Checkout the feature branch (`determined/feature/pytorch-trainer`) and make sure it is up to date.
