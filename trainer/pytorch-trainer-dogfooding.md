@@ -33,6 +33,7 @@ This feature was a major refactor of all Determined PyTorch internals and touche
 - `average_training_metrics` will no longer be configurable. This clunky value was used by `PyTorchContext` and set by default to false. After some discussions around the value of this option, we couldn't think of a good reason to complicate the new codepaths when it's not a feature users really want. We always average training metrics now.
 - `min_checkpoint_period`/`min_validation_period` are no longer relative to last validation, and are explicit periods relative to start of training. They have been appropriately renamed (`checkpoint_period`/`validation_period`) in the Trainer API, but legacy names are still used in the experiment config.
 - `num_gpus`, a previously public value on `PyTorchContext`, is now private. I'm not aware of a real use case for this, and it seems like we accidentally made it public before.
+- `fp16_compression` and `average_aggregated_gradients` are now configured directly in the `wrap_optimizer` call. These configs are specific to optimizers and have been moved out of the experiment config. Experiment config values will still be supported for backwards compatibility but calls to `wrap_optimizer` are encouraged and will override expconf settings.
 
 ## API Specifications
 ### PyTorchTrial
@@ -45,10 +46,12 @@ A major quirk with our Trial code today is the inability for users to instantiat
 ```python
 def init(
     hparams: Optional[Dict] = None, 
+    exp_conf: Optional[Dict[str, Any]] = None,
     distributed: Optional[core.DistributedContext] = None
 ) -> Iterator[pytorch.PyTorchTrialContext]:
 ```
-- `hparams["global_batch_size"]` is a required parameter for local training. When training on-cluster, this value (along with other hyperparameters) will be pulled from the experiment config.
+- `hparams` is an optional parameter. It only needs to be passed into this `init` constructor when the training code access `context.get_hparams()`. Otherwise, it is encouraged to pass hparams directly into the `Trial` instantiated. When training on-cluster, this value (along with other hyperparameters) will be automatically pulled from the experiment config.
+- `exp_conf` is an optional parameter for local training. It is explicitly defined here to make local vs. cluster training more seamless. If undefined in local training, training code that calls `context.get_experiment_config()` will error.
 - `distributed` context can be optionally passed in for custom/advanced use cases (see Distributed Training)
 
 ### trainer.fit()
@@ -66,7 +69,13 @@ def fit(
     test_mode: Optional[bool],
 ) -> None:
 ```
-- `TrainUnit` specifies a type of training step of either `Batch()`, `Epoch()`, or `Record()` type. You can mix and match step types for different training step configurations.
+- `TrainUnit` specifies a type of training step of either `Batch()`, `Epoch()`, or `Record()` type. `TrainUnits` can be `int` or `abc.Container` types. You can mix and match step types for different training step configurations. For example, `validation_period=Batch(1)` would validate every batch. `validation_period=Batch[2,5]` would validate only on batches 2 and 5. A custom implemented `Container` object is also supported:
+    ```
+    class ValidationFreq:
+        def __contains__(self, x):
+            return x == self.custom_freq
+    ```
+    
 - `checkpoint_period`/`validation_period` (previously `min_checkpoint_period`/`min_validation_period`) are explicit periods to checkpoint and validate. If not specified, these default to `sys.maxsize`. In legacy codepaths, these values will be pulled from the experiment config (if running on-cluster). 
 - `reporting_period` (previously `scheduling_unit`) specifies the period to report metrics and check for pre-emption. If not specified, this value defaults to `sys.maxsize`
 - `max_length` specifies the maximum length to train for. This value is only applicable in local training mode. On-cluster training will instead respect the searcher's length.
@@ -98,13 +107,13 @@ Checkout the feature branch (`determined/feature/pytorch-trainer`) and make sure
 Nothing new here. Though it's worth noting that since you instantiate the `Trial` and `TrialContext` objects yourself, you no longer have to initilize and wrap models and optimizers inside of the `Trial.__init__` method. You are free to pass in a wrapped model to `Trial.__init__` if you wish.
 ```python
 class MyPyTorchTrial(pytorch.PyTorchTrial):
-    def __init__(self, context: PyTorchTrialContext) -> None:
+    def __init__(self, context: PyTorchTrialContext, hparams: Dict) -> None:
         self.context = context
         self.model = context.wrap_model(nn.Sequential(
             nn.Linear(9216, 128),
         ))
         self.optimizer = context.wrap_optimizer(torch.optim.Adadelta(
-            self.model.parameters(), lr=0.1)
+            self.model.parameters(), lr=hparams["lr"])
         )
 
     def train_batch(
@@ -165,12 +174,18 @@ if __name__ == "__main__":
 ### 3. (Local training) Run your training script locally
 Training scripts using PyTorch Trainer can be run locally, no experiment config file needed. Be sure to specify `max_length` in the `.fit()` call, and `global_batch_size` in `pytorch.init()`.
 ```diff
-+ with det.pytorch.init(hparams={"global_batch_size": 32}) as train_context:
-      trial = MyPytorchTrial(train_context)
++ hparams = {"global_batch_size": 32, "lr": 0.02}
++ expconf = yaml.safe_load(pathlib.Path("./det.yaml").read_text())
+
+# hparams and exp_conf are optional. Only needed by init() if training code calls
+# context.get_hparams() or context.get_experiment_config()
++ with det.pytorch.init(hparams=hparams, exp_conf=expconf) as train_context:
+      # (Optional) Preferred way to access hparams in the Trial
++     trial = MyPytorchTrial(train_context, hparams)
       trainer = det.pytorch.Trainer(trial, train_context)
       trainer.fit(
 +         max_length=pytorch.Epoch(1),
-          checkpoint_period=pytorch.Batch(10),
+          checkpoint_period=pytorch.Batch([2,5]),
           validation_period=pytorch.Batch(10),
     )
 ```
@@ -190,8 +205,7 @@ Currently only Horovod and PyTorch Distributed backends are supported.
   
 +     # Initialize DistributedContext specifying chief IP
       with det.pytorch.init(
-              hparams={"global_batch_size": 32},
-+             distributed=core.DistributedContext.from_torch_distributed  (chief_ip="localhost")
++       distributed=core.DistributedContext.from_torch_distributed  (chief_ip="localhost")
       ) as train_context:
           trial = MNistTrial(train_context)
           trainer = det.pytorch.Trainer(trial, train_context)
@@ -217,9 +231,61 @@ Helpful for debugging code, PyTorch Trainer accepts a `test_mode` parameter whic
           )
 ```
 This is the same codepath as `det e create det.yaml . --local --test`.
+### 3.5. Preparing your local training code for cluster deployment
+Once the training script is satisfactory with local training, we're ready to submit it to a cluster. This code should allow for local and cluster training with no code changes.
 
+```diff
+  def main():
++   local = det.get_cluster_info() is None
++   if local:
++       # (Optional) Initialize distributed backend before pytorch.init()
++       dist.init_process_group(backend="gloo|nccl")
++       # Set flag used by internal PyTorch training loop
++       os.environ["USE_TORCH_DISTRIBUTED"] = "true"
++       distributed_context = core.DistributedContext.from_torch_distributed  (chief_ip="localhost")
++       # (Optional) Pass in an exp conf and instance of hparams if training code needs it
++       expconf = yaml.safe_load(pathlib.Path("./config.yaml"))
++       hparams = {"lr": 0.02}
++   else:
++       hparams = det.get_cluster_info().trial.hparams
++       expconf = None
++       distributed_context = None
+  
++     with det.pytorch.init(
++       hparams=hparams,
++       exp_conf=expconf,
++       distributed=distributed_context
+      ) as train_context:
+          trial = MNistTrial(train_context)
+          trainer = det.pytorch.Trainer(trial, train_context)
+          trainer.fit(
+              max_length=pytorch.Epoch(1),
+              checkpoint_period=pytorch.Batch(10),
+              validation_period=pytorch.Batch(10),
+          )
+```
+
+The above showcases an example workflow of frequent iterations between local debugging and cluster deployment. To run Trainer API solely on-cluster, the code is much simpler:
+
+```
+def on_cluster():
+    """
+    On-cluster training with Trainer API (entrypoint: python3 train.py)
+    """
+    hparams = det.get_cluster_info().trial.hparams
+
+    with det.pytorch.init() as train_context:
+        trial_inst = model.MNistTrial(train_context, hparams)
+        trainer = det.pytorch.Trainer(trial_inst, train_context)
+        trainer.fit(
+            max_length=pytorch.Epoch(1),
+            checkpoint_period=pytorch.Batch(10),
+            validation_period=pytorch.Batch(10),
+        )
+
+```
 ### 4. (On-cluster) Submit your trial for training
-Create a `.yaml`. Must contain searcher configuration, global batch size, and entrypoint.
+Create a `.yaml`. Must contain searcher configuration and entrypoint. `global_batch_size` is required if `max_length` is configured in `records`
 ``` 
 name: my_pytorch_trainer_trial
 hyperparameters:
