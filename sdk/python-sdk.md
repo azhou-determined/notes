@@ -2,9 +2,15 @@
 
 This document details proposed standards, conventions, and feature additions to the Python SDK.
 
-## Motivation
+## Overview
+### Motivation
 Python SDK has been lacking in attention and support since conception. There are features supported across Determined that are missing from the Python SDK, and design conventions that need to be defined to add them. We have decided to prioritize work on Python SDK in [Q3 of 2023](https://hpe-my.sharepoint.com/:x:/r/personal/maksim_kouznetsov_hpe_com/Documents/ML%20Systems%20roadmap.xlsx?d=w9053a7a12fdf450faf245fcda1b9f520&csf=1&web=1&e=T2TBGt).
 
+- [Conventions](#conventions)
+  - [Naming](#naming)
+  - [Caching](#caching)
+- [Planned Work](#planned-work)
+<a name="conventions"/>
 ## Conventions
 ### Philosophy
 The Python SDK should be thought of as a programmatic way of interacting with Determined clusters and features that allows users to build and integrate with workflows through code. It is a higher-level API used for scripting with Determined that does not contain any standalone features on its own, in contrast to our training (trial API, core API, inference) APIs.
@@ -15,6 +21,7 @@ We should be consistent with naming and design conventions and make desired usag
 
 Today, the Python SDK is in an experimental status because it lacks coherent APIs and features we think are essential. As the SDK grows in a stable and consistent way, the intent is for it to become a first-class feature. This project aims to move us closer to that goal.
 
+<a name="naming"/>
 ### Structure & Naming
 #### Client
 Top-level client is represented as both an instance and singleton (`experimental.Determined()` and `experimental.client`). We support both because it's easy to do so and there are merits for each pattern. 
@@ -42,6 +49,7 @@ Alternative approaches[^1] considered include:
 - Only returning iterables and naming methods `iter_`. This is explicit, but a rather unexpected name for most users.
 - Surfacing a flag (eg. `lazy=True`) to indicate the return type. This introduces a feature flag for a relatively simple operation `list()` users can call themselves but with more overhead.
 
+<a name="caching"/>
 ### Caching
 Network round-trips to the master can get expensive, and we want to minimize fetching "fresh" data when the user does not need it. It's not always possible for us to tell when data is stale, so we will surface a public `refresh()` method on resource objects that will force fetch and update all the properties on the object. 
 
@@ -84,7 +92,7 @@ Still, there are methods available in the CLI that should also exist in the Pyth
 
 Some features available to the web UI and/or REST APIs are also proposed additions to the Python SDK, including downloading code, config, and tensorboard files and support for profiler metrics.
 
-
+<a name="planned-work"/>
 ## Planned Work
 Pre-requisites of new feature adds include implementation of the conventions detailed above:
 | Task                                                                      | Notes                                                                                                                                          | Jira |
