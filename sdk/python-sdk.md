@@ -122,8 +122,8 @@ New features, roughly organized by priority, determined by user/AMLE requests[^5
 | Task information                                         | Task allocation information; requires new `Task` object                                                        |
 | Profiler metrics                                         | Stream profiler metrics from torch profiler and Keras                                                          |
 | Template                                                 | Exists in CLI; may be of use for RBAC templates                                                                |
-| Job                                                      | Missing feature from CLI, low-priority due to no explicit requests for this.                                   |
 | Shell                                                    | Missing feature from CLI, low-priority; method for killing shells might be useful for scripting                |
+| Job                                                      | Missing feature from CLI, low-priority due to no explicit requests for this.                                   |
 ------
 
 <sup>†</sup> In the future, we should reorganize the resource-related methods into their own subclass (eg. `client.experiments.list()`) for clearer separation between high-level client concerns (authentication, establishing initial HTTP connections) and resource classes. However, this is currently not worth the significant breaking change in order to do so. Should a major refactor of Python SDK be planned, we should consider this reorganization.
