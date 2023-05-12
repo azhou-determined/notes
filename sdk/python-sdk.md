@@ -24,9 +24,7 @@ Today, the Python SDK is in an experimental status because it lacks coherent API
 <a name="naming"></a>
 ### Structure & Naming
 #### Client
-Top-level client is represented as both an instance and singleton (`experimental.Determined()` and `experimental.client`). We support both because it's easy to do so and there are merits for each pattern. 
-
-Today, the top-level client contains authentication methods and various methods to obtain a resource's object (eg. `get_experiment`, `get_model`). In the future, we should reorganize the resource-related methods into their own subclass (eg. `client.experiments.list()`) for clearer separation between high-level client concerns (authentication, establishing initial HTTP connections) and resource classes. However, this is currently not worth the significant breaking change in order to do so. Should a major refactor of Python SDK be planned, we should consider this reorganization.
+Top-level client is represented as both an instance and singleton (`experimental.Determined()` and `experimental.client`). We support both because it's easy to do so and there are merits for each pattern. The top-level client contains authentication methods and various methods to obtain a resource's object (eg. `get_experiment`, `get_model`). 
 
 #### Resource Classes
 Each resource is its own class object. We will rename `TrialReference` and `ExperimentReference` to `Trial` and `Experiment`, since they were originally named as such to avoid confusion between the `Trial` object used in training (this still exists today, but can be deprecated altogether).
@@ -123,9 +121,13 @@ New features, roughly organized by priority, determined by user/AMLE requests[^5
 | Downloading code/experiment config                       | Exists in Web UI; download zipped archive of code from cloud/shared FS                                         |
 | Task information                                         | Task allocation information; requires new `Task` object                                                        |
 | Profiler metrics                                         | Stream profiler metrics from torch profiler and Keras                                                          |
-| Template                                                 | Missing feature from CLI, no requests for this but may be useful                                               |
+| Template                                                 | Exists in CLI; may be of use for RBAC templates                                                                |
 | Job                                                      | Missing feature from CLI, low-priority due to no explicit requests for this.                                   |
-| Shell                                                    | Missing feature from CLI, low-priority (does anyone use this?)                                                 |
+| Shell                                                    | Missing feature from CLI, low-priority; method for killing shells might be useful for scripting                |
+
+
+In the future, we should reorganize the resource-related methods into their own subclass (eg. `client.experiments.list()`) for clearer separation between high-level client concerns (authentication, establishing initial HTTP connections) and resource classes. However, this is currently not worth the significant breaking change in order to do so. Should a major refactor of Python SDK be planned, we should consider this reorganization.
+
 
 [^1]: Discussion on list vs. iterable: https://hpe-aiatscale.slack.com/archives/
 [^2]: Discussion of rich objects: https://hpe-aiatscale.slack.com/archives/C02PV33GSN5/p1661531387380029CSLAGUF3M/p1649172941376699?thread_ts=1649172902.178179&cid=CSLAGUF3M
