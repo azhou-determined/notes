@@ -147,15 +147,15 @@ The model weight varies significantly between each iteration step as a result of
 At learning rates below `0.064` the model converges to 1, and at `0.256` they diverge. Between these values, the model seems to get stuck and converges to wrong values.
 
 ---
-**Q11**:
+**Q10**:
 Let `m=2` and fill the following table of per-data-point gradients:
 
 | `(x, ytrue)` | `grad_point` |
 | ------------ | ------------ |
-| (1, 0)       | 1            |
-| (2, 1)       | 3            |
-| (3, 1)       | 7.5          |
-| (4, 6.25)    | 3.5          |
+| (1, 0)       | 4            |
+| (2, 1)       | 12           |
+| (3, 1)       | 30           |
+| (4, 6.25)    | 14           |
 
 Then, with `m=2`, fill the following table of `batch_size=2` batch gradients:
 
@@ -168,7 +168,7 @@ Do you see that by averaging gradients from multiple points, we end up with
 smoother overall gradients?
 
 ---
-**Q12**:
+**Q11**:
 **Answer**:
 ```python
 def train_loop_batches(m: float, lr: float, dataset: List[List[Tuple[int, int]]], iterations: int):
@@ -181,7 +181,7 @@ def train_loop_batches(m: float, lr: float, dataset: List[List[Tuple[int, int]]]
     return m
 ```
 ---
-**Q13**: Write a training loop that simulates data-parallel distributed training. No need for actual distributed mechanics; just do it inside a single process.
+**Q12**: Write a training loop that simulates data-parallel distributed training. No need for actual distributed mechanics; just do it inside a single process.
 **Answer**:
 ```python
 def train_loop_distributed(m: float, lr: float, dataset: List[List[List[Tuple[int, int]]]], iterations: int):
