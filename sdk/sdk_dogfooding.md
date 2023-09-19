@@ -67,10 +67,10 @@ Some interfaces were deprecated (to be removed with completion of Q4 Python SDK 
 ## Example Workflow
 We are shipping a grab bag of SDK improvements along with some core architectural changes (when to cache, reload, etc.). 
 
-My ask from dogfooders would be not to test individual features/improvements, but to assess the Python SDK in its current state as a whole. Try and implement a common workflow you encounter frequently in the SDK.
+My ask from dogfooders would be not to test individual features/improvements, but to assess the Python SDK in its current state as a whole. Try and implement any common workflow you encounter frequently in the SDK:
+- Do you encouter any limitations? What's missing (features, data, etc.)? 
 - Is there anything about the APIs or features that is confusing?
 - Are the methods intuitive? Can you "guess" what classes/methods you need without looking up documentation?
-- What's missing (features, data, etc.)? 
 
 That being said, here is an example workflow of a very primitive distributed hyperparameter search I've implemented taking advantage of some of the new SDK changes:
 
@@ -119,6 +119,7 @@ def create_experiment_with_hparams(
     exp_conf["hyperparameters"][hp_name] = hp_val
 
     exp = client.create_experiment(config=exp_conf, model_dir=model_dir)
+    exp.move_to_project("my_workspace", "my_hpsearch_project")
 
     trial = exp.await_first_trial()
     trial_queue.put(trial.id)
