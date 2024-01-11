@@ -5,7 +5,8 @@ This document serves as the home page for the Q1 2024 project (deemed "Profiling
 1. [Introduction](#introduction)
 2. [Overview](#overview)
 3. [Milestones](#milestones)
-4. [Technical Details & Notes](#technical-details--notes)
+4. [Technical Details](#technical-details)
+5. [Notes](#notes)
 
 ---
 ## Introduction
@@ -86,12 +87,13 @@ Total time estimate: ~4 sprints
 | -------------------------------------------------------- | ------ | --------- | -------- |
 | Install/Run Prometheus and Grafana with deployments      |        |           | 1 sprint |
 | Expose Determined system metrics in Prometheus / Grafana |        |           | 5 days   |
+| Update (?) existing Grafana dashboard                    |        |           | ?        |
 | Link to Grafana from trial page (+Web UI)                |        |           | 1 day    |
 
 
 ---
 
-## Technical Details / Notes
+## Technical Details
 
 ### Determined Profiler
 The Determined profiler exists as a relatively isolated feature in the codebase today. It is heavily coupled with Trial APIs and stored by the backend in a separate table. Since the introduction of generic metrics, we should leverage this and treat system metrics the same way as generic training metrics. This will enable support for non-Trial workloads and enable users to work with system metrics in the same way as training metrics today.
@@ -128,11 +130,27 @@ Prometheus is somewhat supported by our system today as an optional feature. The
   - Expose Grafana to the UI
 - Prometheus + Grafana support for system metrics
   - Expose Determined system metrics via Prometheus
+  - Review (and potentially update) [existing Grafana dashboard](https://docs.determined.ai/0.26.0/_images/grafana-example.png)
+    - Disk I/O and Network I/O currently not included
 - Link in experiment page to Grafana 
   - Link should automatically direct users to appropriate Grafana filter for job
 
 
-### Links and Other Resources
+## Notes
+- Currently collected system metrics by Determined profiler:
+```
+GPU utilization
+GPU free memory
+Network throughput (send)
+Network throughput (receive)
+Disk IOPs
+Disk thorughput (read)
+Disk thorughput (write)
+Free memory
+CPU Utilization
+```
+
+## Links and Other Resources
 
 [Project proposal doc](https://hpe.sharepoint.com/:w:/r/teams/detai/_layouts/15/Doc.aspx?sourcedoc=%7BBBCF1F21-B529-4FD8-BC6D-EBD11243C1DB%7D&file=ml-profiling-v2.docx&action=default&mobileredirect=true)
 
