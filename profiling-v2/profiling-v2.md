@@ -37,10 +37,10 @@ This project can be broken down into a few different components:
 We should defer to native profilers for training-related profiling. PyTorch Profiler and TensorFlow Profiler are widely-used and full-featured profilers that are already built-in to training code, and we should integrate with these in a way that is easy to use and configure. 
 
 
-### Prometheus / Grafana Integration
+### Prometheus / Grafana Integration (OUT OF SCOPE)
 For fine-grained system metrics, we should fully integrate with Prometheus and Grafana. These are industry-standard tools already used by some of our users and provide full-featured profiling observability to cater to advanced use cases.
 
-### Determined Profiler Improvements
+### Determined Profiler Improvements 
 The Determined profiler collects both training and system profiling metrics. We should deprecate and remove support for  training-related profiling and better integrate with native profilers instead. We will maintain our support for system metrics for a few reasons:
 - Users like seeing high-level profiling metrics in one integrated UI view without having to load an external page.
 - Experiments running in "detached mode" will not have Prometheus integration.
@@ -137,7 +137,7 @@ Prometheus is somewhat supported by our system today as an optional feature. The
 
 
 ## Notes
-- Currently collected system metrics by Determined profiler:
+- Currently collected system metrics by Determined profiler (9):
 ```
 GPU utilization
 GPU free memory
@@ -148,27 +148,113 @@ Disk thorughput (read)
 Disk thorughput (write)
 Free memory
 CPU Utilization
+
+"gpu_util"
+"gpu_free_memory"
+"net_throughput_sent"
+"net_throughput_recv"
+"disk_iops"
+"disk_throughput_read"
+"disk_throughput_write"
+"free_memory"
+"cpu_util_simple"
 ```
+
 - Example of current profiling UI 
 ![Profiling Tab](./images/current_profiler_tab.png)
 
-- `metrics` table 
 
-| trial_id | end_time                      | metrics                                                                                                                                                                                                                                                                                                                        | total_batches | trial_run_id | archived | id  | metric_group | partition_type |
-| -------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------- | ------------ | -------- | --- | ------------ | -------------- |
-| 1        | 2024-01-18 12:26:18.090 -0800 | <pre lang="json">{<br>  "avg_metrics": {<br>    "loss": 2.3026461601257324,<br>    "train_error": 0.8875,<br>    "train_accuracy": 0.1125<br>  },<br>  "batch_metrics": [<br>    {<br>      "loss": 2.3049914836883545,<br>      "train_error": 0.875,<br>      "train_accuracy": 0.125<br>    },<br>    ...<br>  ]<br>}</pre> | 10            | 1            | false    | 2   | training     | TRAINING       |
+### Benchmarking
+
+- granularity
+  - today we collect around (10/s * 300s = 3000) metrics max per profiling/training run
+- migrate old trial_profiler_metrics
+- snapshot for testing: https://us-west-2.console.aws.amazon.com/rds/home?region=us-west-2#db-snapshot:engine=postgres;id=perf-test-base-snapshot
+
+```
+Timing is on.
+postgres=> ALTER TABLE metrics DETACH PARTITION raw_steps;
+ALTER TABLE
+Time: 296.602 ms
+postgres=> ALTER TABLE metrics DETACH PARTITION raw_validations;
+ALTER TABLE
+Time: 51.377 ms
+postgres=> ALTER TABLE metrics DETACH PARTITION generic_metrics;
+ALTER TABLE
+Time: 46.520 ms
+postgres=> ALTER TABLE metrics ATTACH PARTITION generic_metrics FOR
+    VALUES IN ('GENERIC');
+ALTER TABLE
+Time: 141.054 ms
+postgres=> ALTER TABLE metrics ATTACH PARTITION raw_validations FOR
+    VALUES IN ('VALIDATION');
+ALTER TABLE
+Time: 376169.825 ms (06:16.170)
+postgres=> ALTER TABLE metrics ATTACH PARTITION raw_steps FOR
+    VALUES IN ('TRAINING');
+^CCancel request sent
+ERROR:  canceling statement due to user request
+Time: 4302925.268 ms (01:11:42.925)
+postgres=> ALTER TABLE metrics ATTACH PARTITION raw_steps FOR
+    VALUES IN ('TRAINING');
+ALTER TABLE
+Time: 654184.608 ms (10:54.185)
+postgres=> ALTER TABLE metrics DETACH PARTITION raw_steps;
+ALTER TABLE
+Time: 57.857 ms
+postgres=> ALTER TABLE metrics ATTACH PARTITION raw_steps FOR
+    VALUES IN ('TRAINING');
+ALTER TABLE
+Time: 113098.478 ms (01:53.098)
+```
+- need to support postgres >= 11=0
+
+- partitioning
+  - add constraint to speed up attach?
+
+- nullable batches migration
+  - `raw_steps` inherits parent `metrics` NOT NULL
+  - dropping NOT NULL on metrics drops it on children too
+  - adding them back to each individual table works
 
 
-- `trial_profiler_metrics` table
+### Determined Profiler System Metrics -> Generic Metrics
 
-| id  | values                                                                     | batches                                                                       | ts                                                                                                                                                                                                                            | labels                                                                                                                                                                   |
-| --- | -------------------------------------------------------------------------- | ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 1   | <pre lang="json">[<br>  1, <br>  1, <br>  1.1, <br>  1, <br>  1<br>]</pre> | <pre lang="json">[<br>  99, <br>  99, <br>  99, <br>  99, <br>  99<br>]</pre> | <pre lang="json">[<br>  '2024-01-18 12:47:45.681132-08', <br>  '2024-01-18 12:47:45.781079-08', <br>  '2024-01-18 12:47:45.880962-08', <br>  '2024-01-18 12:47:45.98112-08', <br>  '2024-01-18 12:47:46.081061-08'<br>]</pre> | <pre lang="json">{<br>  "name": "cpu_util_simple",<br>  "agentId": "i-009012f0f05f82da1",<br>  "trialId": 1,<br>  "metricType": "PROFILER_METRIC_TYPE_SYSTEM"<br>}</pre> |
+- drop NOT NULL constraint on `metrics.total_batches`
+  - don't need to rollback/mark archived because restarts will just continue reporting time
+- make end_time reportable by client
+- change profiler implementation to report to generic metrics
+```
+metrics = {
+  "agent-A": {
+    "GPU-1": {
+      "gpu_util": 0.3,
+      "gpu_free_memory": 1234,
+    },
+    "GPU-2": {
+      "gpu_util": 0.3,
+      "gpu_free_memory": 1234,
+    }
+    "avg_util": 0.3
+  }
+  
+}
+```
 
+### Determined Profiler -> Core API
+- don't report batches, in the future a better "boundary" marker to correlate is core_context.set_status
+- allow collection interval to be configured
 
-
+profiler.on() / profiler.start()
+profiler.off() / profiler.stop()
 
 ## Links and Other Resources
 
 [Project proposal doc](https://hpe.sharepoint.com/:w:/r/teams/detai/_layouts/15/Doc.aspx?sourcedoc=%7BBBCF1F21-B529-4FD8-BC6D-EBD11243C1DB%7D&file=ml-profiling-v2.docx&action=default&mobileredirect=true)
 
+
+## Future
+
+aggregate for each metric
+
+would be nice if we could do "time since job/task/trial/etc started" instead of pure timestamp, but training metrics would have to do this too to be able to correlate
