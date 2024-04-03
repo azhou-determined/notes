@@ -1,4 +1,5 @@
 import contextlib
+import pathlib
 from datetime import datetime
 import json
 import logging
@@ -66,10 +67,17 @@ def get_release_tags() -> typing.Dict:
     rc_mapping = dict(filter(lambda item: len(item[1]) > 1, rc_mapping.items()))
 
     # Filter out outliers/bad data.
-    rc_mapping = dict(filter(lambda item: item[0] not in (EXCLUDED_TAGS), rc_mapping.items()))
+    rc_mapping = dict(
+        filter(lambda item: item[0] not in (EXCLUDED_TAGS), rc_mapping.items())
+    )
 
     # Only include newer (> 2022)
-    rc_mapping = dict(filter(lambda item: get_date_for_tag(item[0]).year >= SINCE_YEAR, rc_mapping.items()))
+    rc_mapping = dict(
+        filter(
+            lambda item: get_date_for_tag(item[0]).year >= SINCE_YEAR,
+            rc_mapping.items(),
+        )
+    )
 
     return rc_mapping
 
@@ -105,7 +113,9 @@ def get_release_commits():
 
     # Exclude bump version commits.
     for v, commits in release_commits.items():
-        commits = dict(filter(lambda x: "chore: bump version" not in x[0], commits.items()))
+        commits = dict(
+            filter(lambda x: "chore: bump version" not in x[0], commits.items())
+        )
         release_commits[v] = commits
 
     return release_commits
@@ -135,7 +145,9 @@ def files_changed():
             total_files[dir_name] += count
 
     # Sort by descending frequency.
-    total_files = dict(sorted(total_files.items(), key=lambda item: item[1], reverse=True))
+    total_files = dict(
+        sorted(total_files.items(), key=lambda item: item[1], reverse=True)
+    )
 
     # Filter out outliers.
     total_files = dict(filter(lambda item: item[1] > 1, total_files.items()))
@@ -148,8 +160,7 @@ def files_changed():
 
 
 def plot_directories_by_release_bars(
-    files_by_dir_and_release: typing.Dict,
-    dir_names: typing.List
+    files_by_dir_and_release: typing.Dict, dir_names: typing.List
 ) -> None:
     """
     Plot stacked bar chart of releases and files changed
@@ -157,7 +168,9 @@ def plot_directories_by_release_bars(
     all_releases = list(files_by_dir_and_release.keys())
     dirs_releases = {}
     for d in dir_names:
-        dirs_releases[d] = [files.get(d, 0) for _, files in files_by_dir_and_release.items()]
+        dirs_releases[d] = [
+            files.get(d, 0) for _, files in files_by_dir_and_release.items()
+        ]
     plot.figure(figsize=(20, 12))
     # Plot first bar.
     plot.bar(all_releases, dirs_releases[dir_names[0]])
@@ -172,7 +185,6 @@ def plot_directories_by_release_bars(
     plot.legend(dir_names)
     plot.title("Files changed per release")
     plot.xticks(rotation=45, ha="right")
-    plot.show()
     plot.savefig(f"{OUTPUT_DIR}/files-changed-per-release-since-{SINCE_YEAR}")
 
 
@@ -183,7 +195,6 @@ def plot_total_directories_pie(files_by_dir: typing.Dict) -> None:
     fig, ax = plot.subplots()
     ax.pie(files_by_dir.values(), labels=files_by_dir.keys(), autopct="%1.1f%%")
     plot.title("Files changed across all releases")
-    plot.show()
     plot.savefig(f"{OUTPUT_DIR}/all-files-changed-since-{SINCE_YEAR}-pie")
 
 
@@ -191,7 +202,15 @@ def get_date_for_tag(rc_tag: str):
     """
     Get the date from the first commit for an `-rc` tag.
     """
-    cmd = ["git", "log", "-1", rc_tag, "--oneline", "--date=short", "--pretty=format:%h,%ad,%s"]
+    cmd = [
+        "git",
+        "log",
+        "-1",
+        rc_tag,
+        "--oneline",
+        "--date=short",
+        "--pretty=format:%h,%ad,%s",
+    ]
     with pushd(DET_ROOT):
         output = subprocess.run(cmd, capture_output=True, text=True)
     for line in output.stdout.splitlines():
@@ -213,16 +232,20 @@ def time_to_release():
         first_rc_date = get_date_for_tag(first_rc)
         # first_rc_date = datetime.strptime(first_rc_date_str, "%Y-%m-%d").date()
         delta_busdays = np.busday_count(first_rc_date, v_date)
-        release_days[v] = {
-            "release_date": v_date,
-            "delta": delta_busdays
-        }
+        release_days[v] = {"release_date": v_date, "delta": delta_busdays}
 
     # Filter by date.
-    release_days = dict(filter(lambda item: item[1]["release_date"].year >= SINCE_YEAR, release_days.items()))
+    release_days = dict(
+        filter(
+            lambda item: item[1]["release_date"].year >= SINCE_YEAR,
+            release_days.items(),
+        )
+    )
 
     # Sort by release date.
-    release_days = dict(sorted(release_days.items(), key=lambda item: item[1]["release_date"]))
+    release_days = dict(
+        sorted(release_days.items(), key=lambda item: item[1]["release_date"])
+    )
 
     # Get just delta.
     for v, d in release_days.items():
@@ -294,7 +317,7 @@ def init():
         logging.info(f"Fetching tags")
         subprocess.run(["git", "fetch", "--tags"])
 
-    os.mkdir(OUTPUT_DIR)
+    pathlib.Path(OUTPUT_DIR).mkdir(exist_ok=True)
 
 
 if __name__ == "__main__":
