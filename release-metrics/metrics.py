@@ -263,7 +263,7 @@ def plot_release_days_bar(release_days: typing.Dict) -> None:
     plot.ylabel("Days to Release")
     plot.title("Days to Release by Version")
     plot.xticks(rotation=45, ha="right")
-    plot.show()
+    plot.savefig(f"{OUTPUT_DIR}/days-to-release-since-{SINCE_YEAR}")
 
 
 def plot_release_days_by_commits_scatter(release_days: typing.Dict) -> None:
@@ -296,7 +296,7 @@ def plot_release_days_by_commits_scatter(release_days: typing.Dict) -> None:
     plot.xlabel("Days to Release")
     plot.ylabel("Number of Commits Since rc0")
     plot.title("Days to Release by Fixes Merged")
-    plot.show()
+    plot.savefig(f"{OUTPUT_DIR}/days-to-release-by-fixes-since-{SINCE_YEAR}")
 
 
 @contextlib.contextmanager
